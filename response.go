@@ -37,7 +37,7 @@ func (resp response) write(w http.ResponseWriter) {
 	}
 	if resp.stream == nil {
 		w.WriteHeader(resp.status)
-		w.Write(resp.body)
+		_, _ = w.Write(resp.body)
 		return
 	}
 	w.Header().Set("Content-Type", "text/event-stream")

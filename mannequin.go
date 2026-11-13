@@ -124,7 +124,7 @@ func jsonHeader() http.Header {
 
 func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	body, _ := io.ReadAll(r.Body)
-	r.Body.Close()
+	_ = r.Body.Close()
 
 	s.mu.Lock()
 	rules := make([]rule, len(s.rules))

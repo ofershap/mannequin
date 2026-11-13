@@ -30,7 +30,7 @@ func post(t *testing.T, url, body string) *http.Response {
 
 func readBody(t *testing.T, resp *http.Response) string {
 	t.Helper()
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatal(err)
@@ -274,7 +274,7 @@ func Example() {
 	if err != nil {
 		panic(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	var got struct {
 		Choices []struct {
 			Message struct {
@@ -282,7 +282,9 @@ func Example() {
 			} `json:"message"`
 		} `json:"choices"`
 	}
-	json.NewDecoder(resp.Body).Decode(&got)
+	if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
+		panic(err)
+	}
 	fmt.Println(got.Choices[0].Message.Content)
 	// Output: 42
 }
