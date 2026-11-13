@@ -48,7 +48,7 @@ func openAIChunkJSON(model, role, content string, finish string) []byte {
 	})
 }
 
-func writeOpenAIStream(w io.Writer, fl http.Flusher, chunks []string) {
+func writeOpenAIStream(w io.Writer, fl http.Flusher, chunks []string, cut bool) {
 	model := ""
 	// emit writes one chunk and flushes; a write error means the caller is
 	// gone, so the stream stops early.
@@ -64,6 +64,9 @@ func writeOpenAIStream(w io.Writer, fl http.Flusher, chunks []string) {
 		if !emit(fmt.Sprintf("data: %s\n\n", openAIChunkJSON(model, "", c, ""))) {
 			return
 		}
+	}
+	if cut {
+		return // die mid-stream: no stop chunk, no [DONE]
 	}
 	if !emit(fmt.Sprintf("data: %s\n\n", openAIChunkJSON(model, "", "", "stop"))) {
 		return

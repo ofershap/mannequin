@@ -1,0 +1,23 @@
+# mannequin
+
+> A stand-in LLM server for Go tests. Point the official OpenAI or Anthropic
+> Go SDK at it and program the responses: fixed text, streamed chunks,
+> injected failures, mid-stream cuts, or recorded cassettes. Zero
+> dependencies, no live API credentials, no external model calls.
+
+## Usage
+
+- s := mannequin.New(t) starts a server bound to the test's lifetime; s.URL() is its base URL.
+- s.On(mannequin.Chat(), mannequin.Text("42")) programs an OpenAI /v1/chat/completions answer.
+- s.On(mannequin.Messages(), mannequin.Text("42")) programs an Anthropic /v1/messages answer.
+- mannequin.Stream("a", "b") streams chunks as SSE in the matched endpoint's format.
+- mannequin.Cut("a", "b") dies mid-stream: partial chunks, no terminating event.
+- s.Fail(429).WithRetryAfter(time.Second) injects failures; WithBody serves custom bodies.
+- s.Record(path) / mannequin.Replay(path) handle JSON cassettes; headers are never recorded.
+- Matchers: mannequin.BodyContains(mannequin.Chat(), "gpt-5.2") narrows a rule by request body.
+- Unmatched requests get a 404 JSON error naming the unmatched call.
+
+## Docs
+
+- [README](https://github.com/ofershap/mannequin#readme): install, examples, cassette safety, Q&A
+- [compat/](https://github.com/ofershap/mannequin/tree/main/compat): pinned SDK versions under test

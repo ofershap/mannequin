@@ -21,11 +21,14 @@ func anthropicMessageJSON(model, text string) []byte {
 	})
 }
 
-func anthropicEvent(event string, data any) string {
+func anthropicEvent(event string, data map[string]any) string {
+	// Anthropic event bodies carry the event name in their "type" field;
+	// SDK unions switch on it.
+	data["type"] = event
 	return fmt.Sprintf("event: %s\ndata: %s\n\n", event, mustJSON(data))
 }
 
-func writeAnthropicStream(w io.Writer, fl http.Flusher, model string, chunks []string) {
+func writeAnthropicStream(w io.Writer, fl http.Flusher, model string, chunks []string, cut bool) {
 	// emit writes one event and flushes; a write error means the caller is
 	// gone, so the stream stops early.
 	emit := func(event string, data map[string]any) bool {
@@ -54,6 +57,9 @@ func writeAnthropicStream(w io.Writer, fl http.Flusher, model string, chunks []s
 			return
 		}
 	}
+	if cut {
+		return // die mid-stream: no closing events
+	}
 	if !emit("content_block_stop", map[string]any{"index": 0}) {
 		return
 	}
@@ -69,8 +75,8 @@ func writeAnthropicStream(w io.Writer, fl http.Flusher, model string, chunks []s
 func writeStream(w io.Writer, fl http.Flusher, spec *streamSpec) {
 	switch spec.format {
 	case formatAnthropic:
-		writeAnthropicStream(w, fl, "", spec.chunks)
+		writeAnthropicStream(w, fl, "", spec.chunks, spec.cut)
 	default:
-		writeOpenAIStream(w, fl, spec.chunks)
+		writeOpenAIStream(w, fl, spec.chunks, spec.cut)
 	}
 }

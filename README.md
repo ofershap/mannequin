@@ -1,8 +1,8 @@
-# mannequin
+![mannequin - a stand-in LLM server for Go tests](assets/hero.png)
 
 **Your agent's tests hit the real LLM API? That's slow, flaky, and bills you for every CI run.**
 
-mannequin is a stand-in LLM server for Go tests. Point your OpenAI or Anthropic SDK at it and program the responses: fixed text, streamed chunks, injected failures, or recorded cassettes. No API key in CI, no network, no surprises.
+mannequin is a stand-in LLM server for Go tests. Point your OpenAI or Anthropic SDK at it and program the responses: fixed text, streamed chunks, injected failures, or recorded cassettes. No live API credentials. No external model calls.
 
 ```go
 func TestAgent(t *testing.T) {
@@ -10,17 +10,28 @@ func TestAgent(t *testing.T) {
     s.On(mannequin.Chat(), mannequin.Text("42"))
 
     client := openai.NewClient(option.WithBaseURL(s.URL()), option.WithAPIKey("test"))
-    // ... run your code against client
+    resp, err := client.Chat.Completions.New(context.Background(), openai.ChatCompletionNewParams{
+        Model:    "gpt-5.2",
+        Messages: []openai.ChatCompletionMessageParamUnion{openai.UserMessage("the answer?")},
+    })
+    if err != nil {
+        t.Fatal(err)
+    }
+    if got := resp.Choices[0].Message.Content; got != "42" {
+        t.Fatalf("answer = %q, want 42", got)
+    }
 }
 ```
 
-Three lines, and the test suite stops calling the API.
+This exact test, executed against the real openai-go SDK:
+
+![go test -run TestAgent ./... -> --- PASS: TestAgent (0.00s) - no live API credentials, no external model calls](assets/demo.png)
 
 ## What you get
 
 - OpenAI `/v1/chat/completions` and Anthropic `/v1/messages` endpoints
 - Fixed-text and SSE streaming responses (chunk by chunk, the way agents actually read)
-- Failure injection: real status codes (429 with `Retry-After`, 500, any other) plus custom bodies, so serving a malformed payload is one line
+- Failure injection: real status codes (429 with `Retry-After`, 500, any other), malformed payloads via custom bodies, and mid-stream cuts for when the provider drops
 - Record/replay cassettes with credential safety built in (details below)
 - Matchers by endpoint and request-body content, so one server plays many models
 - Zero dependencies. `go get` and you're done
@@ -56,6 +67,9 @@ s.On(mannequin.Chat(), mannequin.Stream("Hello, ", "world", "!"))
 
 // Failure paths: test your retry logic for real.
 s.Fail(429).WithRetryAfter(time.Second)
+
+// Provider dies mid-stream: partial chunks, then the connection drops.
+s.On(mannequin.Chat(), mannequin.Cut("partial", " answer"))
 ```
 
 Requests that match no rule get a 404 with a JSON error naming the unmatched call, so a missing fixture fails loudly instead of hanging your suite.
@@ -101,6 +115,9 @@ Same server. `s.On(mannequin.Messages(), ...)` answers `/v1/messages` with corre
 
 **Does it support streaming / SSE?**
 Yes. `mannequin.Stream("chunk1", "chunk2")` emits a real SSE stream per chunk, in both OpenAI and Anthropic event formats.
+
+**How do I test a provider dropping mid-stream?**
+`mannequin.Cut("partial", " answer")` sends the opening events and your chunks, then the connection dies: no terminating event, no clean end of body. The SDK surfaces a stream error after the partial chunks, so you can test recovery for real.
 
 **Can I record real API calls and replay them in CI?**
 Yes. `s.Record(path)` writes a JSON cassette; `mannequin.Replay(path)` serves it back. Headers are never recorded; scrub hooks censor bodies.

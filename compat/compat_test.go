@@ -81,3 +81,81 @@ func TestAnthropicSDK(t *testing.T) {
 		t.Fatalf("stop_reason = %q", msg.StopReason)
 	}
 }
+
+func TestOpenAISDKCut(t *testing.T) {
+	s := mannequin.New(t)
+	s.On(mannequin.Chat(), mannequin.Cut("hel", "lo"))
+
+	client := openai.NewClient(option.WithBaseURL(s.URL()), option.WithAPIKey("test-key"))
+	stream := client.Chat.Completions.NewStreaming(context.Background(), openai.ChatCompletionNewParams{
+		Model:    "gpt-5.2",
+		Messages: []openai.ChatCompletionMessageParamUnion{openai.UserMessage("hi")},
+	})
+	var sb strings.Builder
+	for stream.Next() {
+		chunk := stream.Current()
+		if len(chunk.Choices) > 0 {
+			sb.WriteString(chunk.Choices[0].Delta.Content)
+		}
+	}
+	// Observed with openai-go v2.7.1: a mid-stream cut surfaces as a
+	// non-nil stream error after delivering the partial chunks.
+	if err := stream.Err(); err == nil {
+		t.Fatal("expected a stream error on mid-stream cut, got nil")
+	}
+	if got := sb.String(); got != "hello" {
+		t.Fatalf("partial stream content = %q, want %q", got, "hello")
+	}
+}
+
+func TestAnthropicSDKCut(t *testing.T) {
+	s := mannequin.New(t)
+	s.On(mannequin.Messages(), mannequin.Cut("hel", "lo"))
+
+	client := anthropic.NewClient(aoption.WithBaseURL(s.URL()), aoption.WithAPIKey("test-key"))
+	stream := client.Messages.NewStreaming(context.Background(), anthropic.MessageNewParams{
+		Model:     "claude-sonnet-4-5",
+		MaxTokens: 100,
+		Messages:  []anthropic.MessageParam{anthropic.NewUserMessage(anthropic.NewTextBlock("hi"))},
+	})
+	deltas := 0
+	for stream.Next() {
+		if _, ok := stream.Current().AsAny().(anthropic.ContentBlockDeltaEvent); ok {
+			deltas++
+		}
+	}
+	// Observed with anthropic-sdk-go v1.84.0: same shape as OpenAI -
+	// partial deltas arrive, then the cut surfaces as a stream error.
+	if err := stream.Err(); err == nil {
+		t.Fatal("expected a stream error on mid-stream cut, got nil")
+	}
+	if deltas != 2 {
+		t.Fatalf("content deltas before cut = %d, want 2", deltas)
+	}
+}
+
+func TestAnthropicSDKStreaming(t *testing.T) {
+	s := mannequin.New(t)
+	s.On(mannequin.Messages(), mannequin.Stream("Hello, ", "world"))
+
+	client := anthropic.NewClient(aoption.WithBaseURL(s.URL()), aoption.WithAPIKey("test-key"))
+	stream := client.Messages.NewStreaming(context.Background(), anthropic.MessageNewParams{
+		Model:     "claude-sonnet-4-5",
+		MaxTokens: 100,
+		Messages:  []anthropic.MessageParam{anthropic.NewUserMessage(anthropic.NewTextBlock("hi"))},
+	})
+	var sb strings.Builder
+	for stream.Next() {
+		if delta, ok := stream.Current().AsAny().(anthropic.ContentBlockDeltaEvent); ok {
+			if text, ok := delta.Delta.AsAny().(anthropic.TextDelta); ok {
+				sb.WriteString(text.Text)
+			}
+		}
+	}
+	if err := stream.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if got := sb.String(); got != "Hello, world" {
+		t.Fatalf("streamed = %q", got)
+	}
+}

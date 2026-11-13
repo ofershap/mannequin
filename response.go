@@ -16,10 +16,13 @@ type response struct {
 	stream *streamSpec
 }
 
-// streamSpec describes an SSE stream to emit.
+// streamSpec describes an SSE stream to emit. When cut is true the
+// stream stops after the given chunks: no terminating event, no clean
+// end of body - the connection dies mid-stream, like a provider dropping.
 type streamSpec struct {
 	format streamFormat
 	chunks []string
+	cut    bool
 }
 
 type streamFormat int
@@ -43,6 +46,12 @@ func (resp response) write(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
+	if resp.stream.cut {
+		// Declare a body far larger than we send. When the handler
+		// returns, net/http closes the connection instead of ending
+		// the body, and the client sees an unexpected EOF mid-stream.
+		w.Header().Set("Content-Length", "1073741824")
+	}
 	w.WriteHeader(resp.status)
 	fl, _ := w.(http.Flusher)
 	writeStream(w, fl, resp.stream)
@@ -106,6 +115,27 @@ func (s streamResponder) respond(r *http.Request, _ []byte) response {
 		status: 200,
 		header: http.Header{},
 		stream: &streamSpec{format: format, chunks: append([]string(nil), s...)},
+	}
+}
+
+// Cut answers like Stream but the connection dies after the given
+// chunks: no terminating event, no clean end of body. Use it to test
+// how your code recovers when a provider drops mid-stream.
+func Cut(chunks ...string) Responder {
+	return cutResponder(chunks)
+}
+
+type cutResponder []string
+
+func (c cutResponder) respond(r *http.Request, _ []byte) response {
+	format := formatOpenAI
+	if endpointOf(r) == kindAnthropic {
+		format = formatAnthropic
+	}
+	return response{
+		status: 200,
+		header: http.Header{},
+		stream: &streamSpec{format: format, chunks: append([]string(nil), c...), cut: true},
 	}
 }
 

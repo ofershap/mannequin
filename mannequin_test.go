@@ -288,3 +288,41 @@ func Example() {
 	fmt.Println(got.Choices[0].Message.Content)
 	// Output: 42
 }
+
+func TestCutStreamOpenAI(t *testing.T) {
+	s := New(t)
+	s.On(Chat(), Cut("hel", "lo"))
+
+	resp := post(t, s.URL()+"/v1/chat/completions", `{"model":"gpt-x","messages":[],"stream":true}`)
+	defer func() { _ = resp.Body.Close() }()
+	data, err := io.ReadAll(resp.Body)
+	if err == nil {
+		t.Fatal("expected a read error from a mid-stream cut, got clean EOF")
+	}
+	got := string(data)
+	if !strings.Contains(got, "hel") || !strings.Contains(got, "lo") {
+		t.Fatalf("cut stream lost its chunks: %q", got)
+	}
+	if strings.Contains(got, "[DONE]") {
+		t.Fatal("cut stream contained the terminating [DONE] event")
+	}
+}
+
+func TestCutStreamAnthropic(t *testing.T) {
+	s := New(t)
+	s.On(Messages(), Cut("bon", "jour"))
+
+	resp := post(t, s.URL()+"/v1/messages", `{"model":"claude-x","messages":[],"stream":true}`)
+	defer func() { _ = resp.Body.Close() }()
+	data, err := io.ReadAll(resp.Body)
+	if err == nil {
+		t.Fatal("expected a read error from a mid-stream cut, got clean EOF")
+	}
+	got := string(data)
+	if !strings.Contains(got, "message_start") || !strings.Contains(got, "bon") {
+		t.Fatalf("cut stream lost its opening or chunks: %q", got)
+	}
+	if strings.Contains(got, "message_stop") {
+		t.Fatal("cut stream contained the terminating message_stop event")
+	}
+}
