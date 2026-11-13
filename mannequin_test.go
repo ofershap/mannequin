@@ -185,7 +185,11 @@ func TestRecordReplay(t *testing.T) {
 	}
 
 	player := New(t)
-	player.On(Path(http.MethodPost, "/chat/completions"), MustReplay(cassette))
+	replay, err := Replay(cassette)
+	if err != nil {
+		t.Fatal(err)
+	}
+	player.On(Path(http.MethodPost, "/chat/completions"), replay)
 
 	resp = post(t, player.URL()+"/v1/chat/completions", reqBody)
 	if resp.StatusCode != 200 {
@@ -222,9 +226,9 @@ func TestStreamingIsNotRecorded(t *testing.T) {
 func TestScrubHook(t *testing.T) {
 	cassette := filepath.Join(t.TempDir(), "scrub.json")
 	rec := New(nil)
-	rec.Record(cassette, WithScrub(func(ex *Exchange) {
+	rec.Record(cassette, func(ex *Exchange) {
 		ex.RequestBody = json.RawMessage(`"scrubbed"`)
-	}))
+	})
 	rec.On(Chat(), Text("pong"))
 	resp := post(t, rec.URL()+"/v1/chat/completions", `{"model":"gpt-5.2","messages":[{"role":"user","content":"PRIVATE-PROMPT"}]}`)
 	readBody(t, resp)
@@ -266,7 +270,10 @@ func Example() {
 	defer s.Close()
 	s.On(Chat(), Text("42"))
 
-	resp, _ := http.Post(s.URL()+"/v1/chat/completions", "application/json", strings.NewReader(`{"model":"gpt-5.2","messages":[{"role":"user","content":"meaning?"}]}`))
+	resp, err := http.Post(s.URL()+"/v1/chat/completions", "application/json", strings.NewReader(`{"model":"gpt-5.2","messages":[{"role":"user","content":"meaning?"}]}`))
+	if err != nil {
+		panic(err)
+	}
 	defer resp.Body.Close()
 	var got struct {
 		Choices []struct {

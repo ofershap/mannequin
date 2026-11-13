@@ -81,10 +81,8 @@ func (r *recorder) save() {
 	r.err = os.WriteFile(r.path, data, 0o644)
 }
 
-// WithScrub adds a hook that can modify or censor each recorded exchange
-// before it is stored. Returning an Exchange with nil bodies drops them.
-func WithScrub(f func(*Exchange)) func(*Exchange) { return f }
-
+// A scrub hook can modify or censor each recorded exchange before it is
+// stored; pass one or more hooks to Record.
 // Replay answers requests from a recorded cassette. A request matches an
 // exchange when the method and path suffix match and the JSON request
 // bodies are semantically equal. Unmatched requests get a 422 error.
@@ -98,15 +96,6 @@ func Replay(path string) (Responder, error) {
 		return nil, fmt.Errorf("mannequin: parse cassette: %w", err)
 	}
 	return &replayResponder{c: c}, nil
-}
-
-// MustReplay is Replay that panics on error (handy in tests).
-func MustReplay(path string) Responder {
-	r, err := Replay(path)
-	if err != nil {
-		panic(err)
-	}
-	return r
 }
 
 type replayResponder struct {
