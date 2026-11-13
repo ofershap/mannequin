@@ -13,7 +13,7 @@
 - mannequin.Stream("a", "b") streams chunks as SSE in the matched endpoint's format.
 - mannequin.Cut("a", "b") dies mid-stream: partial chunks, no terminating event.
 - s.Fail(429).WithRetryAfter(time.Second) injects failures; WithBody serves custom bodies.
-- s.Record(path) / mannequin.Replay(path) handle JSON cassettes; headers are never recorded.
+- s.Record(path) / mannequin.Replay(path) handle JSON cassettes; request headers are never recorded.
 - Matchers: mannequin.BodyContains(mannequin.Chat(), "gpt-5.2") narrows a rule by request body.
 - Unmatched requests get a 404 JSON error naming the unmatched call.
 

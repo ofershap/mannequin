@@ -326,3 +326,38 @@ func TestCutStreamAnthropic(t *testing.T) {
 		t.Fatal("cut stream contained the terminating message_stop event")
 	}
 }
+
+func TestFuncResponder(t *testing.T) {
+	s := New(t)
+	s.On(Chat(), Func(func(r *http.Request, reqBody []byte) (int, []byte) {
+		return http.StatusTeapot, []byte(`{"custom":true}`)
+	}))
+	resp := post(t, s.URL()+"/v1/chat/completions", `{"model":"gpt-5.2","messages":[]}`)
+	if resp.StatusCode != http.StatusTeapot {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusTeapot)
+	}
+	body := readBody(t, resp)
+	if !strings.Contains(string(body), `"custom":true`) {
+		t.Fatalf("body = %s", body)
+	}
+}
+
+func TestRecordCapturesFuncExchange(t *testing.T) {
+	cassette := filepath.Join(t.TempDir(), "proxy.json")
+	rec := New(nil)
+	rec.Record(cassette)
+	rec.On(Chat(), Func(func(r *http.Request, reqBody []byte) (int, []byte) {
+		return http.StatusOK, []byte(`{"upstream":"answer"}`)
+	}))
+	resp := post(t, rec.URL()+"/v1/chat/completions", `{"model":"gpt-5.2","messages":[{"role":"user","content":"ping"}]}`)
+	readBody(t, resp)
+	rec.Close()
+
+	data, err := os.ReadFile(cassette)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), `"upstream"`) {
+		t.Fatalf("cassette missing Func exchange: %s", data)
+	}
+}

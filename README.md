@@ -5,6 +5,15 @@
 mannequin is a stand-in LLM server for Go tests. Point your OpenAI or Anthropic SDK at it and program the responses: fixed text, streamed chunks, injected failures, or recorded cassettes. No live API credentials. No external model calls.
 
 ```go
+import (
+    "context"
+    "testing"
+
+    "github.com/ofershap/mannequin"
+    "github.com/openai/openai-go/v2"
+    "github.com/openai/openai-go/v2/option"
+)
+
 func TestAgent(t *testing.T) {
     s := mannequin.New(t)
     s.On(mannequin.Chat(), mannequin.Text("42"))
@@ -40,7 +49,7 @@ This exact test, executed against the real openai-go SDK:
 - OpenAI `/v1/chat/completions` and Anthropic `/v1/messages` endpoints
 - Fixed-text and SSE streaming responses (chunk by chunk, the way agents actually read)
 - Failure injection: real status codes (429 with `Retry-After`, 500, any other), malformed payloads via custom bodies, and mid-stream cuts for when the provider drops
-- Record/replay cassettes with credential safety built in (details below)
+- Record/replay JSON cassettes: request headers are never recorded, and an optional scrub hook censors bodies before they are written
 - Matchers by endpoint and request-body content, so one server plays many models
 - Zero dependencies. `go get` and you're done
 
@@ -57,6 +66,8 @@ By hand:
 ```bash
 go get github.com/ofershap/mannequin@latest
 ```
+
+Requires Go 1.26 or newer.
 
 ## Programmed responses
 
@@ -84,12 +95,12 @@ Requests that match no rule get a 404 with a JSON error naming the unmatched cal
 
 ## Record and replay
 
-Record real exchanges once, replay them forever:
+`s.Record(path)` captures every exchange the server answers - method, path, status, and request and response bodies - into a JSON cassette. That covers your programmed rules and any custom handler you register with `mannequin.Func`. mannequin does not proxy real providers by itself; capturing upstream traffic means writing that proxy handler in your own code. Streaming responses are never recorded.
 
 ```go
 s := mannequin.New(t)
 s.Record("testdata/cassettes/pricing.json")
-s.On(mannequin.Chat(), mannequin.Text("...")) // or proxy code you wrap
+s.On(mannequin.Chat(), mannequin.Text("..."))
 ```
 
 Replay in CI without any key:
@@ -103,11 +114,11 @@ if err != nil {
 s.On(mannequin.Chat(), replay)
 ```
 
-Cassette safety, stated plainly: request headers are never recorded, so `Authorization` and `x-api-key` cannot end up in a cassette. Request and response bodies are recorded verbatim, and bodies can contain private prompts or outputs. Pass a scrub function to `Record` to censor bodies before they are stored, prefer synthetic fixtures, and review cassettes before committing them. Streaming responses are never recorded.
+Cassette safety, stated plainly: request headers are excluded from cassettes, so the `Authorization` and `x-api-key` headers you send are not stored. Request and response bodies are recorded verbatim - and a body can still contain a key or private text you put in a prompt. Pass a scrub function to `Record` to censor bodies before they are stored, prefer synthetic fixtures, and review cassettes before committing them. Streaming responses are never recorded.
 
 ## Before and after
 
-The alternative most Go projects use today is a hand-rolled `httptest` server per test file. A typical version of that is 30-60 lines of boilerplate per endpoint, no streaming, no cassette format, and a silent credential leak waiting to happen. mannequin is the same idea, finished.
+The do-it-yourself version of this is an `httptest` server with hand-serialized response JSON for every endpoint - and hand-written SSE if you need streaming, hand-built failure cases, and no cassette format. mannequin ships those pieces ready-made: both providers' wire formats, streaming, failure injection, mid-stream cuts, and record/replay, each one line per case.
 
 <details>
 <summary>Q&A</summary>
@@ -127,11 +138,11 @@ Yes. `mannequin.Stream("chunk1", "chunk2")` emits a real SSE stream per chunk, i
 **How do I test a provider dropping mid-stream?**
 `mannequin.Cut("partial", " answer")` sends the opening events and your chunks, then the connection dies: no terminating event, no clean end of body. The SDK surfaces a stream error after the partial chunks, so you can test recovery for real.
 
-**Can I record real API calls and replay them in CI?**
-Yes. `s.Record(path)` writes a JSON cassette; `mannequin.Replay(path)` serves it back. Headers are never recorded; scrub hooks censor bodies.
+**Can I record exchanges and replay them in CI?**
+Yes. `s.Record(path)` writes every answered exchange to a JSON cassette; `mannequin.Replay(path)` serves it back with no API key. Recording covers what the server itself answers, including custom `mannequin.Func` handlers - mannequin does not proxy real providers on its own. Request headers are excluded; bodies are stored verbatim unless you pass a scrub hook.
 
 **Which SDK versions does it work with?**
-The compatibility suite pins and tests specific versions (see `compat/`); the wire formats it implements are the stable chat-completions and messages APIs.
+The compatibility suite in `compat/` currently pins and tests openai-go v2.7.1 and anthropic-sdk-go v1.84.0, on Go 1.26 and 1.27; the wire formats it implements are the stable chat-completions and messages APIs.
 
 </details>
 

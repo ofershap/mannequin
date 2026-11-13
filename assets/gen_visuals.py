@@ -64,7 +64,7 @@ def hero():
 
 
 def demo():
-    W, H = 1200, 720
+    W, H = 1200, 1010
     img = Image.new("RGB", (W, H), BG)
     d = ImageDraw.Draw(img)
     # terminal chrome
@@ -79,11 +79,19 @@ def demo():
         ("    s := mannequin.New(t)", FG),
         ("    s.On(mannequin.Chat(), mannequin.Text(\"42\"))", FG),
         ("", None),
-        ("    client := openai.NewClient(option.WithBaseURL(s.URL()), option.WithAPIKey(\"test\"))", FG),
-        ("    resp, err := client.Chat.Completions.New(context.Background(), openai.ChatCompletionNewParams{", FG),
-        ("        Model:    \"gpt-5.2\",", FG),
-        ("        Messages: []openai.ChatCompletionMessageParamUnion{openai.UserMessage(\"the answer?\")},", FG),
-        ("    })", FG),
+        ("    client := openai.NewClient(", FG),
+        ("        option.WithBaseURL(s.URL()),", FG),
+        ("        option.WithAPIKey(\"test\"),", FG),
+        ("    )", FG),
+        ("    resp, err := client.Chat.Completions.New(", FG),
+        ("        context.Background(),", FG),
+        ("        openai.ChatCompletionNewParams{", FG),
+        ("            Model:    \"gpt-5.2\",", FG),
+        ("            Messages: []openai.ChatCompletionMessageParamUnion{", FG),
+        ("                openai.UserMessage(\"the answer?\"),", FG),
+        ("            },", FG),
+        ("        },", FG),
+        ("    )", FG),
         ("    if err != nil {", FG),
         ("        t.Fatal(err)", FG),
         ("    }", FG),
@@ -91,9 +99,10 @@ def demo():
         ("        t.Fatalf(\"answer = %q, want 42\", got)", FG),
         ("    }", FG),
         ("}", FG),
-        ("$ go test -run TestAgent ./...", MUTED),
+        ("", None),
+        ("$ go test -v -run TestAgent ./...", MUTED),
         ("--- PASS: TestAgent (0.00s)", GREEN),
-        ("ok      example.com/agentdemo     0.012s", GREEN),
+        ("ok      example.com/agentdemo     0.005s", GREEN),
         ("# No live API credentials. No external model calls.", (88, 96, 105)),
     ]
     y = 92
