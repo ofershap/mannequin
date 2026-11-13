@@ -9,11 +9,19 @@ func TestAgent(t *testing.T) {
     s := mannequin.New(t)
     s.On(mannequin.Chat(), mannequin.Text("42"))
 
-    client := openai.NewClient(option.WithBaseURL(s.URL()), option.WithAPIKey("test"))
-    resp, err := client.Chat.Completions.New(context.Background(), openai.ChatCompletionNewParams{
-        Model:    "gpt-5.2",
-        Messages: []openai.ChatCompletionMessageParamUnion{openai.UserMessage("the answer?")},
-    })
+    client := openai.NewClient(
+        option.WithBaseURL(s.URL()),
+        option.WithAPIKey("test"),
+    )
+    resp, err := client.Chat.Completions.New(
+        context.Background(),
+        openai.ChatCompletionNewParams{
+            Model:    "gpt-5.2",
+            Messages: []openai.ChatCompletionMessageParamUnion{
+                openai.UserMessage("the answer?"),
+            },
+        },
+    )
     if err != nil {
         t.Fatal(err)
     }
@@ -25,7 +33,7 @@ func TestAgent(t *testing.T) {
 
 This exact test, executed against the real openai-go SDK:
 
-![go test -run TestAgent ./... -> --- PASS: TestAgent (0.00s) - no live API credentials, no external model calls](assets/demo.png)
+![go test -v -run TestAgent ./... -> --- PASS: TestAgent (0.00s), ok example.com/agentdemo 0.005s - no live API credentials, no external model calls](assets/demo.png)
 
 ## What you get
 
