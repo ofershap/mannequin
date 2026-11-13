@@ -20,7 +20,7 @@ Three lines, and the test suite stops calling the API.
 
 - OpenAI `/v1/chat/completions` and Anthropic `/v1/messages` endpoints
 - Fixed-text and SSE streaming responses (chunk by chunk, the way agents actually read)
-- Failure injection: 429 with `Retry-After`, 500, malformed payloads, mid-stream cuts
+- Failure injection: real status codes (429 with `Retry-After`, 500, any other) plus custom bodies, so serving a malformed payload is one line
 - Record/replay cassettes with credential safety built in (details below)
 - Matchers by endpoint and request-body content, so one server plays many models
 - Zero dependencies. `go get` and you're done
@@ -66,7 +66,7 @@ Record real exchanges once, replay them forever:
 
 ```go
 s := mannequin.New(t)
-s.Record("testdata/cassettes/pricing.yaml")
+s.Record("testdata/cassettes/pricing.json")
 s.On(mannequin.Chat(), mannequin.Text("...")) // or proxy code you wrap
 ```
 
@@ -74,7 +74,7 @@ Replay in CI without any key:
 
 ```go
 s := mannequin.New(t)
-replay, err := mannequin.Replay("testdata/cassettes/pricing.yaml")
+replay, err := mannequin.Replay("testdata/cassettes/pricing.json")
 if err != nil {
     t.Fatal(err)
 }
@@ -103,16 +103,16 @@ Same server. `s.On(mannequin.Messages(), ...)` answers `/v1/messages` with corre
 Yes. `mannequin.Stream("chunk1", "chunk2")` emits a real SSE stream per chunk, in both OpenAI and Anthropic event formats.
 
 **Can I record real API calls and replay them in CI?**
-Yes. `s.Record(path)` writes a JSON cassette; `mannequin.MustReplay(path)` serves it. Headers are never recorded; scrub hooks censor bodies.
+Yes. `s.Record(path)` writes a JSON cassette; `mannequin.Replay(path)` serves it back. Headers are never recorded; scrub hooks censor bodies.
 
 **Which SDK versions does it work with?**
 The compatibility suite pins and tests specific versions (see `compat/`); the wire formats it implements are the stable chat-completions and messages APIs.
 
 </details>
 
-## Status
+## Scope
 
-Early, tested, in use. The public API is intentionally small and the supported endpoints are exactly the two listed above; more arrive as real projects need them.
+The public API is intentionally small and the supported endpoints are exactly the two listed above; more arrive as real projects need them.
 
 ---
 
